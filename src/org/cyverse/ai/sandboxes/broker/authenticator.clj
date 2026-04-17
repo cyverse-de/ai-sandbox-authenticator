@@ -48,7 +48,7 @@
   ;; 3. Create account in other subsystems
   (log/info "Creating user via API:" (:username user-info))
   {:success? true
-   :user-id (str (java.util.UUID/randomUUID))})
+   :user-id  (str (java.util.UUID/randomUUID))})
 
 ;;; ---------------------------------------------------------------------------
 ;;; Authenticator implementation
@@ -65,9 +65,9 @@
 (defn- username-available?
   "Check if username is available in both Keycloak and external database."
   [^AuthenticationFlowContext context username]
-  (let [realm (.getRealm context)
-        session (.getSession context)
-        keycloak-user (.getUserByUsername (.users session) realm username)
+  (let [realm            (.getRealm context)
+        session          (.getSession context)
+        keycloak-user    (.getUserByUsername (.users session) realm username)
         external-exists? (check-external-database-for-username username)]
     (and (nil? keycloak-user) (not external-exists?))))
 
@@ -86,74 +86,61 @@
         (.createForm "ai-sandbox-username-selection.ftl")
         (->> (.challenge context)))))
 
+(defn- error-challenge
+  "Returns a challenge that will display an error message to the user."
+  [^AuthenticationFlowContext context
+   ^AuthenticationFlowError error-type
+   msg
+   ^Response$Status status]
+  (.failure context
+            error-type
+            (.createErrorPage (.setError (.form context) msg (object-array [])) status)))
+
+(defn- internal-server-error-challenge
+  [context]
+  (error-challenge
+   context
+   AuthenticationFlowError/INTERNAL_ERROR
+   Messages/INTERNAL_SERVER_ERROR
+   Response$Status/INTERNAL_SERVER_ERROR))
+
+(defn- set-up-keycloak-user
+  "Finishes setting up the new Keycloak user and selects the user for the authentication context."
+  [^UserModel user
+   ^AuthenticationFlowContext context
+   ^SerializedBrokeredIdentityContext serialized-ctx]
+  (.setEnabled user true)
+  (doseq [[attr-name attr-values] (.getAttributes serialized-ctx)]
+    (when-not (= UserModel/USERNAME (.equalsIgnoreCase attr-name))
+      (.setAttribute user attr-name attr-values)))
+  (.setUser context user)
+  (.setAuthNote (.getAuthenticationSession context) "BROKER_REGISTERED_NEW_USER" "true")
+  (log/info "Successfully created user:" (.getUsername user)))
+
 (defn- create-federated-user!
   "Create the user account via the external API and register in Keycloak."
   [^AuthenticationFlowContext context
    ^SerializedBrokeredIdentityContext serialized-ctx
    ^BrokeredIdentityContext broker-context
    username]
-  (let [session (.getSession context)
-        realm (.getRealm context)
-        user-info {:username username
-                   :email (.getEmail broker-context)
+  (let [session   (.getSession context)
+        realm     (.getRealm context)
+        user-info {:username   username
+                   :email      (.getEmail broker-context)
                    :first-name (.getFirstName broker-context)
-                   :last-name (.getLastName broker-context)
+                   :last-name  (.getLastName broker-context)
                    :attributes (.getAttributes serialized-ctx)}]
-
-    ;; TODO: Create user via your API
-    ;; This API call should create the user in all three systems
-    (let [api-result (create-user-via-api! user-info)]
-      (if (:success? api-result)
-        (do
-          ;; After API creates user in LDAP, Keycloak should be able to find them
-          ;; You may need to clear caches or use a different approach depending
-          ;; on your user storage provider configuration
-          (let [federated-user (.getUserByUsername (.users session) realm username)]
-            (if federated-user
-              (do
-                (.setEnabled federated-user true)
-                ;; Set any additional attributes from the broker context
-                (doseq [[attr-name attr-values] (.getAttributes serialized-ctx)]
-                  (when-not (= UserModel/USERNAME (.equalsIgnoreCase attr-name))
-                    (.setAttribute federated-user attr-name attr-values)))
-
-                (.setUser context federated-user)
-                (.setAuthNote (.getAuthenticationSession context)
-                              "BROKER_REGISTERED_NEW_USER" "true")
-                (log/info "Successfully created user:" username)
-                (.success context))
-
-              ;; User was created via API but can't be found in Keycloak
-              ;; This might happen if LDAP sync is delayed
-              (do
-                (log/error "User created via API but not found in Keycloak:" username)
-                (-> context
-                    .form
-                    (.setError Messages/INTERNAL_SERVER_ERROR (into-array Object []))
-                    (.createErrorPage Response$Status/INTERNAL_SERVER_ERROR)
-                    (->> (.failure context AuthenticationFlowError/INTERNAL_ERROR)))))))
-
-        ;; API call failed
-        (do
-          (log/error "Failed to create user via API:" username)
-          (-> context
-              .form
-              (.setError Messages/INTERNAL_SERVER_ERROR (into-array Object []))
-              (.createErrorPage Response$Status/INTERNAL_SERVER_ERROR)
-              (->> (.failure context AuthenticationFlowError/INTERNAL_ERROR))))))))
-
-(defn- error-challenge
-  "Returns a challenge that will display an error message to the user."
-  [^AuthenticationFlowContext context msg ^Response$Status status]
-  (.failure context
-            AuthenticationFlowError/IDENTITY_PROVIDER_ERROR
-            (.createErrorPage (.setError (.form context) msg (object-array [])) status)))
+    (if-not (:success? (create-user-via-api! user-info))
+      (internal-server-error-challenge context)
+      (if-let [user (.getUserByUsername (.users session) realm username)]
+        (set-up-keycloak-user user context serialized-ctx)
+        (internal-server-error-challenge context)))))
 
 (defn- get-user-by-email
   "Check for existing user by email in both Keycloak and external database."
   [^AuthenticationFlowContext context ^BrokeredIdentityContext broker-context]
-  (let [email (.getEmail broker-context)
-        realm (.getRealm context)
+  (let [email   (.getEmail broker-context)
+        realm   (.getRealm context)
         session (.getSession context)]
     (when (and email (not (.isDuplicateEmailsAllowed realm)))
       ;; First check Keycloak
@@ -177,6 +164,7 @@
     (log/warn "Email collition detected, admin intervention required: " (.getDuplicateAttributeValue duplicate))
     (error-challenge
      context
+     AuthenticationFlowError/IDENTITY_PROVIDER_ERROR
      "An account with this email address already exists. Please contact support."
      Response$Status/CONFLICT)
     true))
@@ -233,7 +221,7 @@
    ^SerializedBrokeredIdentityContext serialized-ctx
    ^BrokeredIdentityContext broker-context]
 
-  (let [form-data (.getDecodedFormParameters (.getHttpRequest context))
+  (let [form-data         (.getDecodedFormParameters (.getHttpRequest context))
         selected-username (-> form-data (.getFirst "username") str .trim)]
 
     (cond
