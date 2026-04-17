@@ -1,0 +1,12 @@
+{:paths ["src" "resources"]
+
+ :deps
+ {org.clojure/clojure {:mvn/version "1.12.4"}
+  org.keycloak/keycloak-core {:mvn/version "26.5.7"}
+  org.keycloak/keycloak-server-spi {:mvn/version "26.5.7"}
+  org.keycloak/keycloak-server-spi-private {:mvn/version "26.5.7"}
+  org.keycloak/keycloak-services {:mvn/version "26.5.7"}}
+
+ :aliases
+ {:test {:extra-paths ["test"]
+         :extra-deps {org.clojure/test.check {:mvn/version "1.1.3"}}}}}
