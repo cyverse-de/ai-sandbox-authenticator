@@ -27,7 +27,12 @@
      (.setName "portalConductorPassword")
      (.setLabel "Portal Conductor Password")
      (.setHelpText "HTTP Basic Auth password for portal-conductor")
-     (.setType ProviderConfigProperty/PASSWORD))])
+     (.setType ProviderConfigProperty/PASSWORD))
+   (doto (ProviderConfigProperty.)
+     (.setName "portalConductorInsecure")
+     (.setLabel "Portal Conductor Insecure TLS")
+     (.setHelpText "Set to true to disable TLS certificate verification when calling portal-conductor (NOT recommended for production).")
+     (.setType ProviderConfigProperty/STRING_TYPE))])
 
 (defn factory-getId [_this] provider-id)
 

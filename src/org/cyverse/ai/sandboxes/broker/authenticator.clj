@@ -53,7 +53,11 @@
   (let [base-url   (get config "portalConductorUrl")
         username   (get config "portalConductorUsername")
         password   (get config "portalConductorPassword")
-        url        (str (string/trimr base-url "/") path)
+        insecure?  (= "true" (some-> (get config "portalConductorInsecure") string/lower-case))
+        url        (str (-> base-url
+                            string/trim
+                            (string/replace #"/+$" ""))
+                        path)
         request-fn (case method
                      :get  http/get
                      :post http/post)]
@@ -63,15 +67,16 @@
                             :accept :json
                             :as :stream
                             :throw-exceptions false
-                            ;; Portal-conductor may use a self-signed cert in QA
-                            :insecure? true}
+                            :insecure? insecure?}
                            opts))
         (as-> response
           (let [status (:status response)
-                body   (when (:body response)
-                         (json/read (java.io.InputStreamReader. (:body response))
-                                    :key-fn keyword))]
-            {:status status :body body})))))
+                body   (when-let [stream (:body response)]
+                         (with-open [r (java.io.InputStreamReader.
+                                        stream
+                                        java.nio.charset.StandardCharsets/UTF_8)]
+                           (json/read r :key-fn keyword)))]
+            {:status status :body body}))))
 
 (defn- check-external-database-for-email
   "Check portal-conductor to see if a user with this email already exists.
