@@ -37,6 +37,12 @@
   (when-let [auth-config (.getAuthenticatorConfig context)]
     (.getConfig auth-config)))
 
+(defn- config-available?
+  "Returns true if the authenticator configuration has a portalConductorUrl set."
+  [config]
+  (boolean (and config
+                (not (string/blank? (get config "portalConductorUrl"))))))
+
 (defn- portal-conductor-request
   "Make an authenticated HTTP request to portal-conductor.
 
@@ -53,7 +59,7 @@
   (let [base-url   (get config "portalConductorUrl")
         username   (get config "portalConductorUsername")
         password   (get config "portalConductorPassword")
-        insecure?  (= "true" (some-> (get config "portalConductorInsecure") string/lower-case))
+        insecure?  (Boolean/parseBoolean (get config "portalConductorInsecure"))
         url        (str (-> base-url
                             string/trim
                             (string/replace #"/+$" ""))
@@ -61,22 +67,15 @@
         request-fn (case method
                      :get  http/get
                      :post http/post)]
-    (-> (request-fn url
-                    (merge {:basic-auth [username password]
-                            :content-type :json
-                            :accept :json
-                            :as :stream
-                            :throw-exceptions false
-                            :insecure? insecure?}
-                           opts))
-        (as-> response
-          (let [status (:status response)
-                body   (when-let [stream (:body response)]
-                         (with-open [r (java.io.InputStreamReader.
-                                        stream
-                                        java.nio.charset.StandardCharsets/UTF_8)]
-                           (json/read r :key-fn keyword)))]
-            {:status status :body body})))))
+    (request-fn url
+                (merge {:basic-auth [username password]
+                        :content-type :json
+                        :accept :json
+                        :as :json
+                        :json-opts {:key-fn keyword}
+                        :throw-exceptions false
+                        :insecure? insecure?}
+                       opts))))
 
 (defn- check-external-database-for-email
   "Check portal-conductor to see if a user with this email already exists.
@@ -307,8 +306,7 @@
         preferred-username (get-username context broker-context)]
     (cond
       ;; Configuration must be present.
-      (or (nil? config)
-          (string/blank? (get config "portalConductorUrl")))
+      (not (config-available? config))
       (do
         (log/error "AI Sandbox authenticator is not configured. Set portalConductorUrl in the authenticator config.")
         (internal-server-error-challenge context))
@@ -359,12 +357,11 @@
 
   (let [config            (get-authenticator-config context)
         form-data         (.getDecodedFormParameters (.getHttpRequest context))
-        selected-username (-> form-data (.getFirst "username") str .trim .toLowerCase)]
+        selected-username (-> form-data (.getFirst "username") str string/trim string/lower-case)]
 
     (cond
       ;; Configuration must be present — same guard as authenticate-impl.
-      (or (nil? config)
-          (string/blank? (get config "portalConductorUrl")))
+      (not (config-available? config))
       (do
         (log/error "AI Sandbox authenticator is not configured. Set portalConductorUrl in the authenticator config.")
         (internal-server-error-challenge context))

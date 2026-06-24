@@ -32,7 +32,7 @@
      (.setName "portalConductorInsecure")
      (.setLabel "Portal Conductor Insecure TLS")
      (.setHelpText "Set to true to disable TLS certificate verification when calling portal-conductor (NOT recommended for production).")
-     (.setType ProviderConfigProperty/STRING_TYPE))])
+      (.setType ProviderConfigProperty/BOOLEAN_TYPE))])
 
 (defn factory-getId [_this] provider-id)
 
@@ -58,11 +58,11 @@
 (defn factory-getConfigProperties [_this]
   (java.util.ArrayList. config-properties))
 
-(defn factory-create [_this ^KeycloakSession session]
+(defn factory-create [_this ^KeycloakSession _session]
   (AiSandboxAuthenticator.))
 
-(defn factory-init [_this ^KeycloakSessionFactory factory])
+(defn factory-init [_this ^KeycloakSessionFactory _factory])
 
-(defn factory-postInit [_this ^KeycloakSessionFactory factory])
+(defn factory-postInit [_this ^KeycloakSessionFactory _factory])
 
 (defn factory-close [_this])
