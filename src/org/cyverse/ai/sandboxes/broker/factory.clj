@@ -1,14 +1,33 @@
 (ns org.cyverse.ai.sandboxes.broker.factory
   (:import
    [org.keycloak.models KeycloakSession KeycloakSessionFactory]
-   [com.example.keycloak AiSandboxAuthenticator]))
+   [org.keycloak.provider ProviderConfigProperty]
+   [org.cyverse.ai.sandboxes.broker AiSandboxAuthenticator]))
 
 (gen-class
- :name com.example.keycloak.AiSandboxAuthenticatorFactory
+ :name org.cyverse.ai.sandboxes.broker.AiSandboxAuthenticatorFactory
  :implements [org.keycloak.authentication.AuthenticatorFactory]
  :prefix "factory-")
 
 (def provider-id "ai-sandbox-create-user")
+
+(def config-properties
+  "Configuration properties for the AI Sandbox authenticator."
+  [(doto (ProviderConfigProperty.)
+     (.setName "portalConductorUrl")
+     (.setLabel "Portal Conductor URL")
+     (.setHelpText "Base URL of the portal-conductor service (e.g. https://portal-conductor:443)")
+     (.setType ProviderConfigProperty/STRING_TYPE))
+   (doto (ProviderConfigProperty.)
+     (.setName "portalConductorUsername")
+     (.setLabel "Portal Conductor Username")
+     (.setHelpText "HTTP Basic Auth username for portal-conductor")
+     (.setType ProviderConfigProperty/STRING_TYPE))
+   (doto (ProviderConfigProperty.)
+     (.setName "portalConductorPassword")
+     (.setLabel "Portal Conductor Password")
+     (.setHelpText "HTTP Basic Auth password for portal-conductor")
+     (.setType ProviderConfigProperty/PASSWORD))])
 
 (defn factory-getId [_this] provider-id)
 
@@ -21,7 +40,7 @@
      Checks both Keycloak and external database for existing users.
      Handles username collisions by prompting for alternative username.")
 
-(defn factory-isConfigurable [_this] false)
+(defn factory-isConfigurable [_this] true)
 
 (defn factory-getRequirementChoices [_this]
   (into-array org.keycloak.models.AuthenticationExecutionModel$Requirement
@@ -32,9 +51,7 @@
 (defn factory-isUserSetupAllowed [_this] false)
 
 (defn factory-getConfigProperties [_this]
-  ;; TODO: Add any configuration properties your authenticator needs
-  ;; e.g., API endpoint URLs, timeouts, etc.
-  (java.util.Collections/emptyList))
+  (java.util.ArrayList. config-properties))
 
 (defn factory-create [_this ^KeycloakSession session]
   (AiSandboxAuthenticator.))
