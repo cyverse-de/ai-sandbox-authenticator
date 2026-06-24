@@ -84,18 +84,15 @@
   Returns {:exists? true/false}."
   [config email]
   (log/debug "Checking portal-conductor for email:" email)
-  (try
-    (let [response (portal-conductor-request
-                    config :get
-                    (str "/portal/emails/" (java.net.URLEncoder/encode email "UTF-8") "/exists"))]
-      (if (= 200 (:status response))
-        {:exists? (get-in response [:body :exists] false)}
-        (do
-          (log/warn "Unexpected response from portal-conductor email check:" (:status response))
-          {:exists? false})))
-    (catch Exception e
-      (log/error e "Failed to check external database for email:" email)
-      {:exists? false})))
+  (let [response (portal-conductor-request
+                  config :get
+                  (str "/portal/emails/" (java.net.URLEncoder/encode email "UTF-8") "/exists"))]
+    (if (= 200 (:status response))
+      {:exists? (get-in response [:body :exists] false)}
+      (throw
+       (ex-info "Unexpected response from portal-conductor email check"
+                {:email  email
+                 :status (:status response)})))))
 
 (defn- check-external-database-for-username
   "Check portal-conductor to see if a username is already taken.
@@ -103,18 +100,15 @@
   Returns true if username exists or is restricted, false otherwise."
   [config username]
   (log/debug "Checking portal-conductor for username:" username)
-  (try
-    (let [response (portal-conductor-request
-                    config :get
-                    (str "/portal/users/" (java.net.URLEncoder/encode username "UTF-8") "/exists"))]
-      (if (= 200 (:status response))
-        (get-in response [:body :exists] false)
-        (do
-          (log/warn "Unexpected response from portal-conductor username check:" (:status response))
-          false)))
-    (catch Exception e
-      (log/error e "Failed to check external database for username:" username)
-      false)))
+  (let [response (portal-conductor-request
+                  config :get
+                  (str "/portal/users/" (java.net.URLEncoder/encode username "UTF-8") "/exists"))]
+    (if (= 200 (:status response))
+      (get-in response [:body :exists] false)
+      (throw
+       (ex-info "Unexpected response from portal-conductor username check"
+                {:username username
+                 :status   (:status response)})))))
 
 (defn- create-user-via-api!
   "Create user account via portal-conductor, which handles creating the account
@@ -271,15 +265,20 @@
 (defn- handle-email-collision
   "Checks for an email address collision. Returns true if a collision is detected."
   [^AuthenticationFlowContext context ^BrokeredIdentityContext broker-context config]
-  (when-let [duplicate (get-user-by-email context broker-context config)]
-    (log/warn "Email collision detected, admin intervention required:"
-              (.getDuplicateAttributeValue duplicate))
-    (error-challenge
-     context
-     AuthenticationFlowError/IDENTITY_PROVIDER_ERROR
-     "An account with this email address already exists. Please contact support."
-     Response$Status/CONFLICT)
-    true))
+  (try
+    (when-let [duplicate (get-user-by-email context broker-context config)]
+      (log/warn "Email collision detected, admin intervention required:"
+                (.getDuplicateAttributeValue duplicate))
+      (error-challenge
+       context
+       AuthenticationFlowError/IDENTITY_PROVIDER_ERROR
+       "An account with this email address already exists. Please contact support."
+       Response$Status/CONFLICT)
+      true)
+    (catch Exception e
+      (log/error e "Email lookup failed while checking for collisions")
+      (internal-server-error-challenge context)
+      true)))
 
 (defn- handle-username-collision
   "Checks for a username collision. Returns true if a collision is detected."
@@ -287,10 +286,15 @@
    ^SerializedBrokeredIdentityContext serialized-ctx
    config
    username]
-  (when-not (username-available? context config username)
-    (show-username-selection-form context serialized-ctx username
-                                  "This username is not available. Please choose a different one.")
-    true))
+  (try
+    (when-not (username-available? context config username)
+      (show-username-selection-form context serialized-ctx username
+                                    "This username is not available. Please choose a different one.")
+      true)
+    (catch Exception e
+      (log/error e "Username lookup failed while checking availability")
+      (internal-server-error-challenge context)
+      true)))
 
 (defn authenticate-impl
   "Main authentication logic."
@@ -376,15 +380,17 @@
        context serialized-ctx selected-username
        "Username must contain only lowercase letters and numbers.")
 
-      ;; Check if selected username is available
-      (not (username-available? context config selected-username))
-      (show-username-selection-form
-       context serialized-ctx selected-username
-       "This username is also taken. Please choose a different one.")
-
       ;; Username is valid and available, create the user
       :else
-      (create-federated-user! context serialized-ctx broker-context config selected-username))))
+      (try
+        (if (username-available? context config selected-username)
+          (create-federated-user! context serialized-ctx broker-context config selected-username)
+          (show-username-selection-form
+           context serialized-ctx selected-username
+           "This username is also taken. Please choose a different one."))
+        (catch Exception e
+          (log/error e "Username lookup failed during username selection")
+          (internal-server-error-challenge context))))))
 
 (defn -authenticateImpl
   [_this context serialized-ctx broker-context]
