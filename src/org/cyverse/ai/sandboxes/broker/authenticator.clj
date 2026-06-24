@@ -76,7 +76,7 @@
                                         stream
                                         java.nio.charset.StandardCharsets/UTF_8)]
                            (json/read r :key-fn keyword)))]
-            {:status status :body body}))))
+            {:status status :body body})))))
 
 (defn- check-external-database-for-email
   "Check portal-conductor to see if a user with this email already exists.
