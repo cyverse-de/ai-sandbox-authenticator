@@ -331,6 +331,17 @@
         (.setAuthNote (.getAuthenticationSession context) AbstractIdpAuthenticator/ENFORCE_UPDATE_PROFILE "true")
         (.resetFlow context))
 
+      ;; The preferred username must satisfy portal-conductor's constraints
+      ;; (lowercase alphanumeric only). If it doesn't — for example because
+      ;; registrationEmailAsUsername is enabled on the realm and the IdP
+      ;; returned an email address — skip straight to the selection form rather
+      ;; than attempting collision checks against an invalid username.
+      (not (re-matches #"^[0-9a-z]+$" preferred-username))
+      (do
+        (log/info "Preferred username" preferred-username "does not meet format requirements; prompting for selection")
+        (show-username-selection-form context serialized-ctx ""
+                                      "Please choose a username containing only lowercase letters and numbers."))
+
       :else
       (or (handle-email-collision context broker-context config)
           (handle-username-collision context serialized-ctx config preferred-username)
@@ -347,6 +358,13 @@
         selected-username (-> form-data (.getFirst "username") str .trim .toLowerCase)]
 
     (cond
+      ;; Configuration must be present — same guard as authenticate-impl.
+      (or (nil? config)
+          (string/blank? (get config "portalConductorUrl")))
+      (do
+        (log/error "AI Sandbox authenticator is not configured. Set portalConductorUrl in the authenticator config.")
+        (internal-server-error-challenge context))
+
       ;; Validate username is provided
       (string/blank? selected-username)
       (show-username-selection-form
