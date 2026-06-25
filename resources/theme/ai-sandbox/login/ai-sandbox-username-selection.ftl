@@ -15,7 +15,7 @@
                     <input type="text" id="username" name="username" class="${properties.kcInputClass!}"
                            value="${(attemptedUsername!'')?html}"
                            autofocus autocomplete="off"
-                           aria-invalid="<#if messagesPerField.exists('username')>true</#if>"
+                            aria-invalid="${messagesPerField.exists('username')?string('true','false')}"
                            pattern="[0-9a-z]+"
                            title="Username must contain only lowercase letters and numbers" />
                 </div>
@@ -26,10 +26,11 @@
                 </#if>
             </div>
 
-            <p class="${properties.kcFormGroupClass!}">
-                Your preferred username is not available. Please choose a different username.
-                Usernames must contain only lowercase letters and numbers.
-            </p>
+            <#if !messagesPerField.exists('username')>
+                <p class="${properties.kcFormGroupClass!}">
+                    Please choose a username containing only lowercase letters and numbers.
+                </p>
+            </#if>
 
             <div class="${properties.kcFormGroupClass!}">
                 <div id="kc-form-buttons" class="${properties.kcFormButtonsClass!}">

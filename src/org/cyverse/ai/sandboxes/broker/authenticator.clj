@@ -74,7 +74,10 @@
                         :as :json
                         :json-opts {:key-fn keyword}
                         :throw-exceptions false
-                        :insecure? insecure?}
+                        :insecure? insecure?
+                        :socket-timeout 10000
+                        :connection-timeout 5000
+                        :connection-request-timeout 5000}
                        opts))))
 
 (defn- check-external-database-for-email
