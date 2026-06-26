@@ -32,7 +32,7 @@
      (.setName "portalConductorInsecure")
      (.setLabel "Portal Conductor Insecure TLS")
      (.setHelpText "Set to true to disable TLS certificate verification when calling portal-conductor (NOT recommended for production).")
-      (.setType ProviderConfigProperty/BOOLEAN_TYPE))])
+     (.setType ProviderConfigProperty/BOOLEAN_TYPE))])
 
 (defn factory-getId [_this] provider-id)
 

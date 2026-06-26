@@ -4,12 +4,12 @@
    :extends org.keycloak.authentication.authenticators.broker.AbstractIdpAuthenticator
    :state state
    :init init)
-(:require
-    [clojure.data.json :as json]
-    [clojure.string :as string]
-    [clojure.tools.logging :as log]
-    [clj-http.client :as http]
-    [cemerick.url :refer [url url-encode]])
+  (:require
+   [clojure.data.json :as json]
+   [clojure.string :as string]
+   [clojure.tools.logging :as log]
+   [clj-http.client :as http]
+   [cemerick.url :refer [url url-encode]])
   (:import
    [org.keycloak.authentication AuthenticationFlowContext AuthenticationFlowError]
    [org.keycloak.authentication.authenticators.broker AbstractIdpAuthenticator]
@@ -130,9 +130,9 @@
                     :email      (:email user-info)
                     :first_name (:first-name user-info)
                     :last_name  (:last-name user-info)}
-response (portal-conductor-request
-                     config :post ["portal" "users"]
-                     {:body (json/write-str body)})]
+          response (portal-conductor-request
+                    config :post ["portal" "users"]
+                    {:body (json/write-str body)})]
       (case (:status response)
         201 {:success? true
              :user-id  (str (get-in response [:body :user_id]))}
