@@ -2,11 +2,27 @@
 
  :deps
  {org.clojure/clojure {:mvn/version "1.12.4"}
-  org.keycloak/keycloak-core {:mvn/version "26.5.7"}
-  org.keycloak/keycloak-server-spi {:mvn/version "26.5.7"}
-  org.keycloak/keycloak-server-spi-private {:mvn/version "26.5.7"}
-  org.keycloak/keycloak-services {:mvn/version "26.5.7"}}
+  org.clojure/tools.logging {:mvn/version "1.3.0"}
+  org.clojure/data.json {:mvn/version "2.5.1"}
+  clj-http/clj-http {:mvn/version "3.13.0"}
+   com.cemerick/url {:mvn/version "0.1.1"}
+  org.keycloak/keycloak-core {:mvn/version "26.6.3"}
+  org.keycloak/keycloak-server-spi {:mvn/version "26.6.3"}
+  org.keycloak/keycloak-server-spi-private {:mvn/version "26.6.3"}
+  org.keycloak/keycloak-services {:mvn/version "26.6.3"}}
 
  :aliases
  {:test {:extra-paths ["test"]
-         :extra-deps {org.clojure/test.check {:mvn/version "1.1.3"}}}}}
+         :extra-deps {org.clojure/test.check {:mvn/version "1.1.3"}}}
+
+   :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.7"}}
+           :ns-default build}
+
+   ;; Dependencies to package into the provider uberjar. Keycloak artifacts and
+   ;; their transitive dependencies are provided by the server at runtime, so
+   ;; they are intentionally omitted here.
+   :uber {:replace-deps {org.clojure/clojure {:mvn/version "1.12.4"}
+                         org.clojure/tools.logging {:mvn/version "1.3.0"}
+                         org.clojure/data.json {:mvn/version "2.5.1"}
+                         clj-http/clj-http {:mvn/version "3.13.0"}
+                         com.cemerick/url {:mvn/version "0.1.1"}}}}}
