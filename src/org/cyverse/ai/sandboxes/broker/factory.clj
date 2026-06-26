@@ -1,7 +1,8 @@
 (ns org.cyverse.ai.sandboxes.broker.factory
   (:import
+   [org.keycloak Config Config$Scope]
    [org.keycloak.models KeycloakSession KeycloakSessionFactory]
-   [org.keycloak.provider ProviderConfigProperty]
+   [org.keycloak.provider Provider ProviderConfigProperty]
    [org.cyverse.ai.sandboxes.broker AiSandboxAuthenticator]))
 
 (gen-class
@@ -61,8 +62,26 @@
 (defn factory-create [_this ^KeycloakSession _session]
   (AiSandboxAuthenticator.))
 
-(defn factory-init [_this ^KeycloakSessionFactory _factory])
+(defn factory-init [_this ^Config$Scope _config])
 
 (defn factory-postInit [_this ^KeycloakSessionFactory _factory])
 
 (defn factory-close [_this])
+
+;; Default method implementations required because Clojure gen-class does not
+;; inherit Java 8 default interface methods.
+
+(defn factory-order [_this]
+  0)
+
+(defn factory-getConfigMetadata [_this]
+  (java.util.ArrayList.))
+
+(defn factory-dependsOn [_this]
+  (java.util.HashSet.))
+
+(defn factory-getOptionalReferenceCategories [_this ^KeycloakSession _session]
+  (java.util.HashSet.))
+
+(defn factory-getConfig [_this]
+  nil)

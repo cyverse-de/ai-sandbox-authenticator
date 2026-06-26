@@ -6,6 +6,7 @@
 (def class-dir "target/classes")
 (def uber-file (format "target/%s-%s-standalone.jar" (name lib) version))
 (def basis (delay (b/create-basis {:project "deps.edn"})))
+(def uber-basis (delay (b/create-basis {:project "deps.edn" :aliases [:uber]})))
 
 (defn clean [_]
   (b/delete {:path "target"}))
@@ -20,9 +21,10 @@
                   :class-dir class-dir})
   (b/uber {:class-dir class-dir
            :uber-file uber-file
-           :basis @basis
-           ;; Exclude Keycloak jars - they're provided by the server at runtime
-           ;; Use regex patterns: .* matches any sequence of characters
+           :basis @uber-basis
+           ;; Keycloak and its transitive dependencies are provided by the
+           ;; server at runtime. Keep only our runtime dependencies.
            :exclude ["org/keycloak/.*"
                      "jakarta/.*"
-                     "org/jboss/.*"]}))
+                     "org/jboss/.*"
+                     "com/google/protobuf/.*"]}))
