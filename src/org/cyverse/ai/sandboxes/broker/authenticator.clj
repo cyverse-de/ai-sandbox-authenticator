@@ -4,11 +4,12 @@
    :extends org.keycloak.authentication.authenticators.broker.AbstractIdpAuthenticator
    :state state
    :init init)
-  (:require
-   [clojure.data.json :as json]
-   [clojure.string :as string]
-   [clojure.tools.logging :as log]
-   [clj-http.client :as http])
+(:require
+    [clojure.data.json :as json]
+    [clojure.string :as string]
+    [clojure.tools.logging :as log]
+    [clj-http.client :as http]
+    [cemerick.url :refer [url url-encode]])
   (:import
    [org.keycloak.authentication AuthenticationFlowContext AuthenticationFlowError]
    [org.keycloak.authentication.authenticators.broker AbstractIdpAuthenticator]
@@ -50,24 +51,25 @@
     config: Map with keys \"portalConductorUrl\", \"portalConductorUsername\",
             \"portalConductorPassword\"
     method: :get or :post
-    path: URL path (e.g. \"/portal/users/foo/exists\")
+    path-segments: Vector of URL path segments (e.g. [\"portal\" \"users\"
+                 \"foo\" \"exists\"]). Path segments are joined onto the
+                 configured portal-conductor base URL using com.cemerick.url.
+                 Segments that may contain reserved characters should be
+                 URL-encoded by the caller (e.g. with `url-encode`).
     opts: Additional options (e.g. :body for POST requests)
 
   Returns:
     Parsed JSON response body as a map with keyword keys."
-  [config method path & [opts]]
+  [config method path-segments & [opts]]
   (let [base-url   (get config "portalConductorUrl")
         username   (get config "portalConductorUsername")
         password   (get config "portalConductorPassword")
         insecure?  (Boolean/parseBoolean (get config "portalConductorInsecure"))
-        url        (str (-> base-url
-                            string/trim
-                            (string/replace #"/+$" ""))
-                        path)
+        request-url (str (apply url (string/trim base-url) path-segments))
         request-fn (case method
                      :get  http/get
                      :post http/post)]
-    (request-fn url
+    (request-fn request-url
                 (merge {:basic-auth [username password]
                         :content-type :json
                         :accept :json
@@ -88,7 +90,7 @@
   (log/debug "Checking portal-conductor for email:" email)
   (let [response (portal-conductor-request
                   config :get
-                  (str "/portal/emails/" (java.net.URLEncoder/encode email "UTF-8") "/exists"))]
+                  ["portal" "emails" (url-encode email) "exists"])]
     (if (= 200 (:status response))
       {:exists? (get-in response [:body :exists] false)}
       (throw
@@ -104,7 +106,7 @@
   (log/debug "Checking portal-conductor for username:" username)
   (let [response (portal-conductor-request
                   config :get
-                  (str "/portal/users/" (java.net.URLEncoder/encode username "UTF-8") "/exists"))]
+                  ["portal" "users" (url-encode username) "exists"])]
     (if (= 200 (:status response))
       (get-in response [:body :exists] false)
       (throw
@@ -128,9 +130,9 @@
                     :email      (:email user-info)
                     :first_name (:first-name user-info)
                     :last_name  (:last-name user-info)}
-          response (portal-conductor-request
-                    config :post "/portal/users"
-                    {:body (json/write-str body)})]
+response (portal-conductor-request
+                     config :post ["portal" "users"]
+                     {:body (json/write-str body)})]
       (case (:status response)
         201 {:success? true
              :user-id  (str (get-in response [:body :user_id]))}
