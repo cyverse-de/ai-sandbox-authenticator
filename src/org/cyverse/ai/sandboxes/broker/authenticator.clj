@@ -68,19 +68,22 @@
         request-url (str (apply url (string/trim base-url) path-segments))
         request-fn (case method
                      :get  http/get
-                     :post http/post)]
-    (request-fn request-url
-                (merge {:basic-auth [username password]
-                        :content-type :json
-                        :accept :json
-                        :as :json
-                        :json-opts {:key-fn keyword}
-                        :throw-exceptions false
-                        :insecure? insecure?
-                        :socket-timeout 10000
-                        :connection-timeout 5000
-                        :connection-request-timeout 5000}
-                       opts))))
+                     :post http/post)
+        response   (request-fn request-url
+                               (merge {:basic-auth [username password]
+                                       :content-type :json
+                                       :accept :json
+                                       :throw-exceptions false
+                                       :insecure? insecure?
+                                       :socket-timeout 10000
+                                       :connection-timeout 5000
+                                       :connection-request-timeout 5000}
+                                      opts))]
+    ;; Parse the response body with clojure.data.json rather than clj-http's
+    ;; built-in JSON support, which requires cheshire and therefore Jackson —
+    ;; a library that conflicts with the version Keycloak provides at runtime.
+    (update response :body #(when (and % (not (string/blank? %)))
+                              (json/read-str % :key-fn keyword)))))
 
 (defn- check-external-database-for-email
   "Check portal-conductor to see if a user with this email already exists.
@@ -156,13 +159,30 @@
 ;;; Authenticator implementation
 ;;; ---------------------------------------------------------------------------
 
+(defn- email-local-part
+  "Extract the local part (before @) from an email address, or nil if not a valid email."
+  [email]
+  (when (and email (string/includes? email "@"))
+    (first (string/split email #"@"))))
+
 (defn- get-username
-  "Extract username from broker context."
+  "Extract username from broker context.
+
+  Preference order:
+  1. Local part of the email address (e.g. 'defalut' from 'defalut@arizona.edu') —
+     most likely to be a meaningful, human-readable username.
+  2. getModelUsername, if it does not look like an email address.
+  3. Fall back to getModelUsername as-is (may be a numeric ID or email —
+     the format validation in authenticate-impl will catch it and prompt
+     the user to choose a username)."
   [^AuthenticationFlowContext context ^BrokeredIdentityContext broker-context]
-  (let [realm (.getRealm context)]
-    (if (.isRegistrationEmailAsUsername realm)
-      (.getEmail broker-context)
-      (.getModelUsername broker-context))))
+  (let [email          (.getEmail broker-context)
+        model-username (.getModelUsername broker-context)
+        email-local    (email-local-part email)]
+    (cond
+      (not (string/blank? email-local))       email-local
+      (not (string/includes? (or model-username "") "@")) model-username
+      :else                                   model-username)))
 
 (defn- username-available?
   "Check if username is available in both Keycloak and the external database."
@@ -216,7 +236,8 @@
       (.setAttribute user attr-name attr-values)))
   (.setUser context user)
   (.setAuthNote (.getAuthenticationSession context) "BROKER_REGISTERED_NEW_USER" "true")
-  (log/info "Successfully created user:" (.getUsername user)))
+  (log/info "Successfully created user:" (.getUsername user))
+  (.success context))
 
 (defn- create-federated-user!
   "Create the user account via portal-conductor and register in Keycloak."
@@ -309,6 +330,7 @@
   (let [config             (get-authenticator-config context)
         broker             (.getIdpConfig broker-context)
         preferred-username (get-username context broker-context)]
+
     (cond
       ;; Configuration must be present.
       (not (config-available? config))

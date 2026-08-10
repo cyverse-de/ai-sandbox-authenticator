@@ -13,7 +13,7 @@
                 </div>
                 <div class="${properties.kcInputWrapperClass!}">
                     <input type="text" id="username" name="username" class="${properties.kcInputClass!}"
-                           value="${(attemptedUsername!'')?html}"
+                           value="${attemptedUsername!''}"
                            autofocus autocomplete="off"
                             aria-invalid="${messagesPerField.exists('username')?string('true','false')}"
                            pattern="[0-9a-z]+"
@@ -39,7 +39,7 @@
                 </div>
             </div>
 
-            <input type="hidden" name="brokerContext" value="${(brokerContext!'')?html}" />
+            <input type="hidden" name="brokerContext" value="${brokerContext!''}" />
         </form>
     </#if>
 </@layout.registrationLayout>

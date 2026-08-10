@@ -21,8 +21,8 @@
    ;; Dependencies to package into the provider uberjar. Keycloak artifacts and
    ;; their transitive dependencies are provided by the server at runtime, so
    ;; they are intentionally omitted here.
-   :uber {:replace-deps {org.clojure/clojure {:mvn/version "1.12.4"}
-                         org.clojure/tools.logging {:mvn/version "1.3.0"}
-                         org.clojure/data.json {:mvn/version "2.5.1"}
-                         clj-http/clj-http {:mvn/version "3.13.0"}
-                         com.cemerick/url {:mvn/version "0.1.1"}}}}}
+    :uber {:replace-deps {org.clojure/clojure {:mvn/version "1.12.4"}
+                          org.clojure/tools.logging {:mvn/version "1.3.0"}
+                          org.clojure/data.json {:mvn/version "2.5.1"}
+                          clj-http/clj-http {:mvn/version "3.13.0"}
+                          com.cemerick/url {:mvn/version "0.1.1"}}}}}

@@ -1,0 +1,8 @@
+{
+  "themes": [
+    {
+      "name": "ai-sandbox",
+      "types": ["login"]
+    }
+  ]
+}
