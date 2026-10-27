@@ -309,7 +309,7 @@
             (error-challenge
              context
              AuthenticationFlowError/IDENTITY_PROVIDER_ERROR
-             "An account with this email address already exists. Please contact CyVerse support for help accessing it."
+             "An account with this email address already exists. Please contact support."
              Response$Status/CONFLICT)
             true)
           false)))
