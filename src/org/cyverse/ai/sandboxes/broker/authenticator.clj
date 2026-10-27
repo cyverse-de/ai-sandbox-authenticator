@@ -117,6 +117,11 @@
                 {:username username
                  :status   (:status response)})))))
 
+
+(def ^:const sandbox-job-limit
+  "Hard-coded concurrent VICE job limit for all sandbox users."
+  2)
+
 (defn- create-user-via-api!
   "Create user account via portal-conductor, which handles creating the account
   in all systems (Portal DB, LDAP, iRODS).
@@ -129,10 +134,15 @@
   [config user-info]
   (log/info "Creating user via portal-conductor:" (:username user-info))
   (try
-    (let [body     {:username   (:username user-info)
-                    :email      (:email user-info)
-                    :first_name (:first-name user-info)
-                    :last_name  (:last-name user-info)}
+    (let [subscription-plan (get config "subscriptionPlan")
+          body (cond-> {:username   (:username user-info)
+                        :email      (:email user-info)
+                        :first_name (:first-name user-info)
+                        :last_name  (:last-name user-info)
+                        :job_limit  sandbox-job-limit}
+                 (and subscription-plan
+                      (not (string/blank? subscription-plan)))
+                 (assoc :subscription_plan subscription-plan))
           response (portal-conductor-request
                     config :post ["portal" "users"]
                     {:body (json/write-str body)})]
