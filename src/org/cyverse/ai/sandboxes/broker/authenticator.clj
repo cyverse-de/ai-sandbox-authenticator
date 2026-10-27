@@ -267,39 +267,52 @@
                      "Check LDAP federation sync settings.")
           (internal-server-error-challenge context))))))
 
-(defn- get-user-by-email
-  "Check for existing user by email in both Keycloak and the external database."
-  [^AuthenticationFlowContext context ^BrokeredIdentityContext broker-context config]
-  (let [email   (.getEmail broker-context)
-        realm   (.getRealm context)
+(defn- get-keycloak-user-by-email
+  "Returns the Keycloak UserModel for the given email, or nil if not found.
+   Skips the check when the realm allows duplicate emails."
+  [^AuthenticationFlowContext context email]
+  (let [realm   (.getRealm context)
         session (.getSession context)]
     (when (and email (not (.isDuplicateEmailsAllowed realm)))
-      ;; First check Keycloak
-      (if-let [existing-user (.getUserByEmail (.users session) realm email)]
-        (do
-          (log/debug "Found existing user in Keycloak with email:" email)
-          (ExistingUserInfo. (.getId existing-user) UserModel/EMAIL email))
-        ;; Then check portal-conductor
-        (let [external-result (check-external-database-for-email config email)]
-          (when (:exists? external-result)
-            (log/debug "Found existing user in external database with email:" email)
-            ;; Return a sentinel ExistingUserInfo - the user exists externally
-            ;; but not in Keycloak, which requires admin intervention
-            (ExistingUserInfo. "external-user" UserModel/EMAIL email)))))))
+      (.getUserByEmail (.users session) realm email))))
+
+(defn- portal-email-exists?
+  "Check portal-conductor to see if a user with this email already exists."
+  [config email]
+  (:exists? (check-external-database-for-email config email)))
 
 (defn- handle-email-collision
-  "Checks for an email address collision. Returns true if a collision is detected."
-  [^AuthenticationFlowContext context ^BrokeredIdentityContext broker-context config]
+  "Returns true if a collision was found and handled (caller should return).
+   Returns false if no collision — caller proceeds with user creation."
+  [^AuthenticationFlowContext context
+   ^BrokeredIdentityContext broker-context
+   config]
   (try
-    (when-let [duplicate (get-user-by-email context broker-context config)]
-      (log/warn "Email collision detected, admin intervention required:"
-                (.getDuplicateAttributeValue duplicate))
-      (error-challenge
-       context
-       AuthenticationFlowError/IDENTITY_PROVIDER_ERROR
-       "An account with this email address already exists. Please contact support."
-       Response$Status/CONFLICT)
-      true)
+    (let [email (.getEmail broker-context)]
+      (if-let [keycloak-user (get-keycloak-user-by-email context email)]
+        ;; Case 1: User exists in Keycloak with matching email.
+        ;; Set EXISTING_USER_INFO so the Handle Existing Account sub-flow
+        ;; prompts the user to confirm and verify ownership before linking.
+        (let [existing-info (ExistingUserInfo. (.getId keycloak-user)
+                                               UserModel/EMAIL
+                                               (.getEmail keycloak-user))]
+          (log/info "Email collision with existing Keycloak user — deferring to linking flow:" email)
+          (.setAuthNote (.getAuthenticationSession context)
+                        AbstractIdpAuthenticator/EXISTING_USER_INFO
+                        (.serialize existing-info))
+          (.attempted context)
+          true)
+        ;; Case 2: Check portal-conductor for users not yet in Keycloak.
+        (if (portal-email-exists? config email)
+          (do
+            (log/warn "Email exists in portal DB but not in Keycloak — admin intervention required:" email)
+            (error-challenge
+             context
+             AuthenticationFlowError/IDENTITY_PROVIDER_ERROR
+             "An account with this email address already exists. Please contact support."
+             Response$Status/CONFLICT)
+            true)
+          false)))
     (catch Exception e
       (log/error e "Email lookup failed while checking for collisions")
       (internal-server-error-challenge context)
