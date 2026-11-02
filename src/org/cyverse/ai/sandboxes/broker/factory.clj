@@ -33,7 +33,13 @@
      (.setName "portalConductorInsecure")
      (.setLabel "Portal Conductor Insecure TLS")
      (.setHelpText "Set to true to disable TLS certificate verification when calling portal-conductor (NOT recommended for production).")
-     (.setType ProviderConfigProperty/BOOLEAN_TYPE))])
+     (.setType ProviderConfigProperty/BOOLEAN_TYPE))
+   (doto (ProviderConfigProperty.)
+     (.setName "subscriptionPlan")
+     (.setLabel "QMS Subscription Plan")
+     (.setType ProviderConfigProperty/STRING_TYPE)
+     (.setDefaultValue "")
+     (.setHelpText "QMS plan name to assign to created users (e.g. 'Basic', 'Pro'). Leave empty to skip and the user gets a default plan on first use."))])
 
 (defn factory-getId [_this] provider-id)
 
